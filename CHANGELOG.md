@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Add Lithuanian phonemizer using espeak-ng plus a pitch accent dictionary
+    - `--data.phoneme_type lithuanian` for training; `"phoneme_type": "lithuanian"` in a voice config for synthesis
+    - espeak-ng's Lithuanian voice phonemizes well but places stress incorrectly in roughly half of the words, and it cannot express the three Lithuanian pitch accents at all: it collapses them into one primary-stress mark, so kártas ("a time") and kar̃tas ("bitter") come out identical
+    - The phonemizer keeps espeak-ng as the phoneme source and moves the stress mark to the accented syllable using a dictionary built from the LIEPA corpus and the g2p-lt-lexicon, both CC-BY-4.0; words that are missing keep espeak-ng's own placement
+    - Accents reuse ˈ and ˌ and add ˋ (U+02CB) - one symbol appended to the default IPA map, so Lithuanian voices stay compatible with the IPA-based (espeak) warmstart
+    - The stress dictionary (3 MB, CC-BY-4.0) and the letter-name table ship with piper as package data, like the Hebrew model: pip install, download the voice, it works - no extra files and no new dependency; a voice may pass its own files to `LithuanianPhonemizer` instead
+    - Lithuanian also has a vocative case spelled like the nominative but accented differently (mamà "mother" vs mãma "mum!"); a dictionary holding one entry per spelling cannot express it, so a short list of nouns that occur as address ships alongside, and a word on that list fenced off by commas is accented on the first syllable
+    - The shipped letter-name table also separates z and ž, which espeak-ng names identically (ʑˈee), so the initials of "Zigmas" and "Žygimantas" are no longer read the same, and names Š "šė" rather than "eš"
+
 ## 1.8.0
 
 - Add Thai phonemizer using TLTK in the new `th` extra
