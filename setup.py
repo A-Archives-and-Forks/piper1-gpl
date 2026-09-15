@@ -36,6 +36,7 @@ LITHUANIAN_DATA_FILES = [
     for f_name in (
         "lt_kirciai.tsv",
         "lt_raides.tsv",
+        "lt_kreipiniai.tsv",
         "LICENSE",
         "SOURCE",
     )

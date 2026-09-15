@@ -12,13 +12,16 @@ from piper.phonemize_lithuanian import (
     CIRCUMFLEX,
     DEFAULT_DICTIONARY_PATH,
     DEFAULT_LETTERS_PATH,
+    DEFAULT_VOCATIVES_PATH,
     GRAVE,
     LithuanianPhonemizer,
     ipa_vowel_groups,
     letter_ipa,
     load_dictionary,
     load_letters,
+    load_vocatives,
     place_accent,
+    vocative_accent,
 )
 
 # word <TAB> vowel group index <TAB> pitch accent mark
@@ -243,6 +246,67 @@ def test_espeak_cache_is_bounded(dictionary_path: Path) -> None:
     for word in ["dabar", "diena", "maistas", "kalbėdamas"]:
         phonemizer.phonemize_word(word)
     assert len(phonemizer._cache) <= 2
+
+
+# --- vocative (šauksmininkas) ---------------------------------------------
+
+
+def test_vocatives_ship_with_piper() -> None:
+    assert DEFAULT_VOCATIVES_PATH.is_file()
+    assert "mama" in load_vocatives(DEFAULT_VOCATIVES_PATH)
+
+
+def test_vocative_is_accented_on_the_first_syllable_and_lengthened() -> None:
+    """ "mama" as address: mamà -> ˈmaːːma."""
+    phonemizer = LithuanianPhonemizer()
+    for text in ("Labas, mama.", "Ačiū tau, mama.", "Mama, ar tu mus palaikysi?"):
+        assert "ˈmaːːma" in "".join(
+            p for s in phonemizer.phonemize(text) for p in s
+        ), text
+
+
+def test_vocative_needs_both_fences() -> None:
+    """A comma elsewhere in the sentence is not enough: the word itself must be
+    fenced off. None of these is an address."""
+    phonemizer = LithuanianPhonemizer()
+    for text in (
+        "Mano mama vakar buvo parduotuvėje.",
+        "Vaje vaje, kiek daug telpa tame žodyje mama.",
+        "Jie ėjo drauge dainuodami.",
+    ):
+        ipa = "".join(p for s in phonemizer.phonemize(text) for p in s)
+        assert "ˈmaːːma" not in ipa, text
+
+
+def test_vocative_lengthens_only_a_short_single_vowel() -> None:
+    """The accent moves for every listed noun, but only a short single vowel is
+    doubled: "tėti" is already long and "vaikeli" starts on a diphthong."""
+    phonemizer = LithuanianPhonemizer()
+    for text, expected in (
+        ("Ačiū tau, tėti.", "ˈtʲeetʲi"),
+        ("Labas, vaikeli.", "ˈvaikʲeɭi"),
+        ("Sudie, močiute.", "ˈmoːtɕʲutʲe"),
+    ):
+        assert expected in "".join(p for s in phonemizer.phonemize(text) for p in s)
+
+
+def test_vocative_at_the_start_of_a_sentence() -> None:
+    phonemizer = LithuanianPhonemizer()
+    ipa = "".join(p for s in phonemizer.phonemize("Sūnau, ateik.") for p in s)
+    assert ipa.startswith("ˈsuːnau")
+
+
+def test_empty_vocatives_file_switches_the_rule_off(tmp_path: Path) -> None:
+    empty = tmp_path / "none.tsv"
+    empty.write_text("# no vocatives\n", encoding="utf-8")
+    phonemizer = LithuanianPhonemizer(vocatives_path=empty)
+    assert not phonemizer.vocatives
+    ipa = "".join(p for s in phonemizer.phonemize("Labas, mama.") for p in s)
+    assert "ˈmaːːma" not in ipa
+
+
+def test_vocative_accent_leaves_a_word_without_vowels_alone() -> None:
+    assert vocative_accent("mm") == "mm"
 
 
 def test_z_and_z_caron_initials_are_told_apart() -> None:

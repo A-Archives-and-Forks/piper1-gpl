@@ -62,8 +62,12 @@ directory. The format is documented on load_dictionary()."""
 
 DEFAULT_LETTERS_PATH = LITHUANIAN_DIR / "lt_raides.tsv"
 """Letter names espeak-ng gets wrong when a word is spelled out; see
-load_letters(). Both files are data a voice may replace: pass its own paths to
-LithuanianPhonemizer instead of patching piper."""
+load_letters(). All three data files may be replaced by a voice: pass its own
+paths to LithuanianPhonemizer instead of patching piper."""
+
+DEFAULT_VOCATIVES_PATH = LITHUANIAN_DIR / "lt_kreipiniai.tsv"
+"""Nouns that occur as direct address; see load_vocatives() and
+vocative_accent(). An empty file switches the vocative rule off."""
 
 # Pitch accent marks.
 ACUTE = "ˈ"  # tvirtapradė (falling), U+02C8 - espeak primary stress
@@ -153,6 +157,72 @@ def letter_ipa(
     return ipa
 
 
+# Matching ignores Lithuanian diacritics, so the file can stay plain ASCII and
+# "teti" also matches "tėti".
+_STRIP_DIACRITICS = str.maketrans("ąčęėįšųūžĄČĘĖĮŠŲŪŽ", "aceeisuuzACEEISUUZ")
+_VOCATIVE_OPENERS = (",", ":", "-", "–", "—")
+_VOCATIVE_CLOSERS = (",", ".", "!", "?", "…")
+
+
+def load_vocatives(path: Union[str, Path]) -> frozenset:
+    """word[<TAB>note]  ->  {word}, diacritics stripped.
+
+    Nouns that occur as direct address. Lines starting with # are comments;
+    the shipped file explains the rule and why the list is deliberately short.
+    An empty file switches the vocative rule off."""
+    words = set()
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            word = line.rstrip("\n").split("\t")[0].strip().lower()
+            if word:
+                words.add(word.translate(_STRIP_DIACRITICS))
+    return frozenset(words)
+
+
+def is_vocative(words: List[str], tokens: List[str], i: int, vocatives) -> bool:
+    """True when word `i` is a listed noun fenced off by commas or the sentence
+    edge on both sides ("Labas, mama." yes; "Mano mama grįžo." no)."""
+    if not vocatives:
+        return False
+    if words[i].lower().translate(_STRIP_DIACRITICS) not in vocatives:
+        return False
+    opened = i == 0 or tokens[i - 1].rstrip().endswith(_VOCATIVE_OPENERS)
+    closed = i == len(tokens) - 1 or tokens[i].rstrip().endswith(_VOCATIVE_CLOSERS)
+    return opened and closed
+
+
+def vocative_accent(ipa: str) -> str:
+    """Accent the first syllable and lengthen its vowel: mama -> ˈmaːːma.
+
+    The form was picked by blind listening among nine candidate spellings.
+    Moving the accent alone was still heard as too short, and writing the
+    vocative with a pitch accent mark (tildė) came out as an echo rather than
+    an accent - the corpus behind the dictionary barely marks those, so a voice
+    trained on it has not learned them. Doubling the length mark is what the
+    listener chose.
+
+    The vowel is lengthened only when the first vowel group is a single short
+    vowel; diphthongs and already-long vowels keep their length, since only
+    "mama" has been verified by ear and a diphthong carries length differently
+    (tėti -> ˈtʲeetʲi, vaikeli -> ˈvaikʲeɭi).
+    """
+    accented = place_accent(ipa, 0, ACUTE)
+    groups = ipa_vowel_groups(accented)
+    if not groups:
+        return accented
+    start = groups[0]
+    end = start
+    while end + 1 < len(accented) and (
+        accented[end + 1] in IPA_VOWELS or accented[end + 1] == LENGTH
+    ):
+        end += 1
+    if end != start:  # diphthong or already long
+        return accented
+    return accented[: end + 1] + LENGTH * 2 + accented[end + 1 :]
+
+
 def ipa_vowel_groups(ipa: str) -> List[int]:
     """Start index of every vowel group (adjacent vowels + ː form one group)."""
     groups, i = [], 0
@@ -226,6 +296,7 @@ class LithuanianPhonemizer:
         espeak_data_dir: Union[str, Path] = ESPEAK_DATA_DIR,
         expand_text: Optional[Callable[[str], str]] = None,
         letters_path: Union[str, Path] = DEFAULT_LETTERS_PATH,
+        vocatives_path: Union[str, Path] = DEFAULT_VOCATIVES_PATH,
     ) -> None:
         """
         :param dictionary_path: Stress dictionary (word, vowel group index,
@@ -234,6 +305,9 @@ class LithuanianPhonemizer:
         :param espeak_data_dir: Path to espeak-ng data dir.
         :param letters_path: Letter-name corrections (see load_letters).
             Defaults to the shipped file; a voice may pass its own.
+        :param vocatives_path: Nouns that occur as direct address (see
+            load_vocatives). Defaults to the shipped file; a voice may pass its
+            own, or an empty file to switch the vocative rule off.
         :param expand_text: Optional text normalizer applied before
             phonemization. Lithuanian number and abbreviation expansion is
             distributed with the voice rather than here, because it is
@@ -247,6 +321,7 @@ class LithuanianPhonemizer:
             dictionary_path,
         )
         self.letters = load_letters(letters_path)
+        self.vocatives = load_vocatives(vocatives_path)
         self.espeak = EspeakPhonemizer(espeak_data_dir)
         self.expand_text = expand_text
         self._cache: Dict[str, str] = {}
@@ -299,7 +374,10 @@ class LithuanianPhonemizer:
             override = letter_ipa(
                 word, words[i + 1] if i + 1 < len(words) else "", self.letters
             )
-            pieces.append((override or self.phonemize_word(word)) + punct)
+            ipa = override or self.phonemize_word(word)
+            if override is None and is_vocative(words, tokens, i, self.vocatives):
+                ipa = vocative_accent(ipa)
+            pieces.append(ipa + punct)
         return " ".join(pieces)
 
     def phonemize(self, text: str) -> List[List[str]]:
