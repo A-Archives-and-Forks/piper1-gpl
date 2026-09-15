@@ -243,3 +243,24 @@ def test_espeak_cache_is_bounded(dictionary_path: Path) -> None:
     for word in ["dabar", "diena", "maistas", "kalbėdamas"]:
         phonemizer.phonemize_word(word)
     assert len(phonemizer._cache) <= 2
+
+
+def test_z_and_z_caron_initials_are_told_apart() -> None:
+    """espeak-ng names both z and ž ʑˈee, so "Z. Kazlauskas" and
+    "Ž. Kazlauskas" came out identical; the shipped letter table separates
+    them, and names Š "šė" rather than "eš"."""
+    phonemizer = LithuanianPhonemizer()
+
+    def ipa(text: str) -> str:
+        return "".join(p for s in phonemizer.phonemize(text) for p in s)
+
+    assert ipa("Kalbėjo Ž. Kazlauskas.") != ipa("Kalbėjo Z. Kazlauskas.")
+    assert "ʒˈee" in ipa("Kalbėjo Ž. Kazlauskas.")
+    assert "zˈee" in ipa("Kalbėjo Z. Kazlauskas.")
+    assert "ɕˈee" in ipa("Filmą kūrė Š. Bartas.")
+
+
+def test_letter_table_does_not_touch_ordinary_words() -> None:
+    phonemizer = LithuanianPhonemizer()
+    for word, expected in (("žodis", "ʒ"), ("zona", "z"), ("šuo", "ʃ")):
+        assert phonemizer.phonemize_word(word).lstrip("ˈˌˋ").startswith(expected)

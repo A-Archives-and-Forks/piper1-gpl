@@ -14,5 +14,15 @@
 # i:  lengthened because as the last letter of a spelled-out abbreviation
 #     ("VMI") a short i is simply not heard; in the corpus the letter name
 #     appears mid-sentence, where it is short.
+# z, ž: espeak-ng gives both the same name, ʑˈee, so the initials of "Zigmas"
+#     and "Žygimantas" are read identically. It also names Š as "eš" (ˋeʃ),
+#     the pattern of ef/el/em/en/er/es, but Lithuanian Š is "šė". The forms
+#     below are the corpus' own: žė ʒˈee (5), zė zˈee (2), šė ɕˈee (1),
+#     against vė vʲˈee (44) and bė bʲˈee (22), which espeak already gets right.
+#     Y is left alone on the same grounds: espeak reads it "igrek" and so does
+#     the corpus (ˌiːɡrʲek), even though the school name is "i ilgoji".
 el	ˈel̩	pašt
 i	ˈiː
+z	zˈee
+ž	ʒˈee
+š	ɕˈee
