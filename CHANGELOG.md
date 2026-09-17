@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Resolve renamed voices in `piper.download_voices` using the `aliases` list in voices.json
+    - A voice that has been renamed keeps its old name in the `aliases` list of its voices.json entry, but nothing honored it: the downloader builds its URL from the voice name alone and never reads voices.json, so every pre-1.0 name (`de-karlsson-low`, `zh-cn-huayan-x-low`, ...) failed - those names do not even match the `<language>-<name>-<quality>` pattern, so they raised before any download was attempted
+    - A name that does not parse, or that parses but 404s, is now looked up in the `aliases` lists and downloaded under its current name, with a warning saying what it was renamed to
+    - voices.json is only downloaded when a name actually has to be resolved, so a current name still costs the same two requests it always did
 - Add Lithuanian phonemizer using espeak-ng plus a pitch accent dictionary
     - `--data.phoneme_type lithuanian` for training; `"phoneme_type": "lithuanian"` in a voice config for synthesis
     - espeak-ng's Lithuanian voice phonemizes well but places stress incorrectly in roughly half of the words, and it cannot express the three Lithuanian pitch accents at all: it collapses them into one primary-stress mark, so kártas ("a time") and kar̃tas ("bitter") come out identical
